@@ -1,0 +1,9 @@
+token.txt
+.idea/
+.venv/
+__pycache__/
+.env
+key.json
+.vscode
+test.py
+add*.txt
