@@ -4,6 +4,8 @@ from sheets import *
 from keyboards.inline import *
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.fsm.context import FSMContext
+from datetime import datetime
+import pytz
 
 
 router1 = Router()
@@ -34,7 +36,7 @@ async def adress_callback(callback: CallbackQuery):
     for i in adress[1:]:
         buffer += f"Адрес: {find_address(i[1])}\nВладелец: {i[2]}\nТелефон: {create_whatsapp_link(i[3])}\nПримечание: {i[4]}\n\n"
 
-    await callback.message.answer(text=f"{buffer}")
+    await callback.message.answer(text=f"{buffer}", disable_web_page_preview=True)
     await callback.answer("")
 
 
@@ -54,7 +56,7 @@ async def zayavka_callback(callback: CallbackQuery):
             f"Адрес: {find_address(i[2])}\nВладелец: {i[3]}\nКоличество: {i[4]}\n\n"
         )
 
-    await callback.message.answer(text=f"{buffer}")
+    await callback.message.answer(text=f"{buffer}", disable_web_page_preview=True)
     await callback.answer("")
 
 
@@ -198,44 +200,26 @@ async def reglament_callback(callback: CallbackQuery):
         pass
 
     # ------------------------------------------------------------------------------
-    sheet_sort = sh.worksheet("Сортировка")
-    sheet_otchet = sh.worksheet("Отчет")
+    sheet1 = sh.worksheet("Продажи")
+    sheet2 = sh.worksheet("Отчет")
+    data1 = sheet1.get_all_records()  # данные из таблицы "Продажи"
+    data2 = sheet2.get_all_records()  # данные из таблицы "Отчет"
 
-    sorti = sheet_sort.get_all_records()
-    otchet = sheet_otchet.get_all_records()
+    for record in data2:
+        address = record.get('Адрес')  # Предполагаем, что ключ для адреса - 'адрес'
+        was_value = record.get('было')  # Предполагаем, что ключ для "было" - 'было'
+        became_value = record.get('стало')  # Предполагаем, что ключ для "стало" - 'стало'
 
-    inventory1 = {
-        row["Наименование"]: {
-            "id товара": row["id товара"],
-            "Количество": row["Количество"],
-            "Цена": row["Цена"],
-        }
-        for row in sorti
-    }
-    inventory2 = {row["Наименование"]: row["Количество"] for row in otchet}
-
-    result_inventory = {}
-    for name, data in inventory1.items():
-        id_ = data["id товара"]
-        qty1 = data["Количество"]
-        price = data["Цена"]
-        qty2 = inventory2.get(name, 0)
-
-        result_inventory[name] = {
-            "id товара": id_,
-            "Количество": qty1 - qty2,
-            "Цена": price,
-        }
-
-    new_data = [
-        [data["id товара"], name, data["Количество"], data["Цена"]]
-        for name, data in result_inventory.items()
-    ]
-
-    sheet_sort.batch_clear(["A2:Z"])
-    sheet_sort.append_rows(new_data, value_input_option="RAW")
+        # Поиск адреса в таблице "Продажи"
+        for sale_record in data1:
+            if sale_record.get('адрес') == address:  # Сравниваем адреса
+                # Обновление данных "было" и "стало" в таблице "Продажи"
+                row_index = data1.index(sale_record) + 2  # Индекс строки (плюс 2, т.к. gspread использует 1-индексацию и первая строка - заголовки)
+                sheet1.update_cell(row_index, <номер_колонны_было>, was_value)  # Замените <номер_колонны_было> на реальный номер колонки в таблице
+                sheet1.update_cell(row_index, <номер_колонны_стало>, became_value)  # Замените <номер_колонны_стало> на реальный номер колонки в таблице
+                print(f"Обновлено: {address}, было: {was_value}, стало: {became_value}")
     # -----------------------------------------------------------------------------
-    await callback.message.edit_text(text=f"Отчет отправлен в таблицу")
+    await callback.message.edit_text(text=f"Отчет отправлен в таблицу Продажи")
     await callback.answer("")
 
 
@@ -281,7 +265,6 @@ async def reglament_callback(callback: CallbackQuery):
 async def reglament_callback(callback: CallbackQuery):
     worksheet_otch = sh.worksheet("Отчет")
     worksheet_zada = sh.worksheet("Задание")
-    worksheet_vse = sh.worksheet("Общее количество")
 
     existing_data = worksheet_otch.get_all_values()[1:]
     if existing_data:
@@ -361,7 +344,5 @@ def find_address(address):
 
 
 def create_whatsapp_link(phone_number):
-    # Уберите любые символы кроме цифр
     normalized_number = "".join(filter(str.isdigit, phone_number))
-    # Создайте ссылку
     return f"https://wa.me/{normalized_number}"
