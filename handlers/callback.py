@@ -5,7 +5,6 @@ from keyboards.inline import *
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.fsm.context import FSMContext
 from datetime import datetime
-import pytz
 
 
 router1 = Router()
@@ -202,22 +201,9 @@ async def reglament_callback(callback: CallbackQuery):
     # ------------------------------------------------------------------------------
     sheet1 = sh.worksheet("Продажи")
     sheet2 = sh.worksheet("Отчет")
-    data1 = sheet1.get_all_records()  # данные из таблицы "Продажи"
-    data2 = sheet2.get_all_records()  # данные из таблицы "Отчет"
+    data1 = sheet1.get_all_records()
+    data2 = sheet2.get_all_records()
 
-    for record in data2:
-        address = record.get('Адрес')  # Предполагаем, что ключ для адреса - 'адрес'
-        was_value = record.get('было')  # Предполагаем, что ключ для "было" - 'было'
-        became_value = record.get('стало')  # Предполагаем, что ключ для "стало" - 'стало'
-
-        # Поиск адреса в таблице "Продажи"
-        for sale_record in data1:
-            if sale_record.get('адрес') == address:  # Сравниваем адреса
-                # Обновление данных "было" и "стало" в таблице "Продажи"
-                row_index = data1.index(sale_record) + 2  # Индекс строки (плюс 2, т.к. gspread использует 1-индексацию и первая строка - заголовки)
-                sheet1.update_cell(row_index, <номер_колонны_было>, was_value)  # Замените <номер_колонны_было> на реальный номер колонки в таблице
-                sheet1.update_cell(row_index, <номер_колонны_стало>, became_value)  # Замените <номер_колонны_стало> на реальный номер колонки в таблице
-                print(f"Обновлено: {address}, было: {was_value}, стало: {became_value}")
     # -----------------------------------------------------------------------------
     await callback.message.edit_text(text=f"Отчет отправлен в таблицу Продажи")
     await callback.answer("")
