@@ -5,6 +5,7 @@ from keyboards.inline import *
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.fsm.context import FSMContext
 from datetime import datetime
+from pytz import timezone
 
 
 router1 = Router()
@@ -198,32 +199,25 @@ async def reglament_callback(callback: CallbackQuery):
     with open("add_otchet.txt", "w") as file:
         pass
 
-    # ------------------------------------------------------------------------------
-    sheet1 = sh.worksheet("Продажи")
-    sheet2 = sh.worksheet("Отчет")
-    data1 = sheet1.get_all_records()
-    data2 = sheet2.get_all_records()
-
-    # -----------------------------------------------------------------------------
-    await callback.message.edit_text(text=f"Отчет отправлен в таблицу Продажи")
+    await callback.message.edit_text(text=f"Отчет отправлен в таблицу")
     await callback.answer("")
 
 
 @router1.callback_query(F.data == "Добавить_отчет")  # админ_склада
 async def reglament_callback(callback: CallbackQuery, state: FSMContext):
     await state.set_state(Otchet.text)
-    await callback.message.edit_text(
-        text="Отчет : Введите Адрес Владельца Наименование Количество"
-    )
+    await callback.message.edit_text(text="Введите Адрес Владельца Было Стало")
     await callback.answer("")
 
 
 @router1.message(Otchet.text)
 async def reglament_process_callback(message: Message, state: FSMContext):
+    moscow_tz = timezone("Europe/Moscow")
+    current_date = datetime.now(moscow_tz).strftime("%d-%m-%Y")  # время %H:%M:%S
     data = message.text
     await state.clear()
     with open("add_otchet.txt", "a") as file:
-        file.writelines(f"{data}\n")
+        file.writelines(f"{data} {current_date}\n")
 
     await message.answer(
         f"Добавлено, нажмите подтвердить чтобы отправить в таблицу",
