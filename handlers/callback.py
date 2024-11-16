@@ -141,9 +141,7 @@ async def reglament_callback(callback: CallbackQuery):
 @router1.callback_query(F.data == "Добавить_задание")  # админ_склада
 async def reglament_callback(callback: CallbackQuery, state: FSMContext):
     await state.set_state(Zadanie.text)
-    await callback.message.edit_text(
-        text="Введите Адрес Владельца Количество Наименование Телефон"
-    )
+    await callback.message.edit_text(text="Введите Адрес Владельца Количество Телефон")
     await callback.answer("")
 
 
@@ -250,7 +248,7 @@ async def reglament_callback(callback: CallbackQuery):
     if existing_data:
         pass
 
-    worksheet_otch.batch_clear(["A2:D"])
+    worksheet_otch.batch_clear(["A2:E"])
     worksheet_zada.batch_clear(["A2:G"])
     await callback.message.edit_text(text="Отчет и Задание очищены")
     await callback.answer("")
