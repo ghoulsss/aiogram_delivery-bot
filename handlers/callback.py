@@ -123,17 +123,51 @@ async def zadanie_callback(callback: CallbackQuery):
 async def reglament_callback(callback: CallbackQuery):
     with open("add_zadanie.txt", "r", encoding="utf-8") as file:
         buf = []
+        total_deducted = 0  # Переменная для суммирования
         for line in file:
             row = line.strip().split()
             buf.append(row)
+            if len(row) > 2:  # Убедитесь, что в строке есть хотя бы 3 столбца
+                try:
+                    total_deducted += int(
+                        row[2]
+                    )  # Суммируем количество из третьего столбца
+                except ValueError:
+                    pass  # Если значение нельзя преобразовать в int, просто пропускаем
 
     worksheet = sh.worksheet("Задание")
-
     worksheet.append_rows(buf)
 
     with open("add_zadanie.txt", "w") as file:
         pass
 
+    # Получаем значение из ячейки A2 и преобразуем в целое число
+    total_quantity_cell = sh.worksheet("Общее количество").cell(2, 1).value
+    print(f"Значение из ячейки A2: '{total_quantity_cell}'")  # Отладочная информация
+
+    try:
+        current_total_quantity = int(total_quantity_cell)
+    except ValueError:
+        await callback.message.answer(
+            "Ошибка: значение в ячейке A2 не является числом."
+        )
+        return  # Завершаем выполнение при ошибке
+
+    # Проверяем, достаточно ли товара для вычитания
+    if current_total_quantity >= total_deducted:
+        new_total_quantity = current_total_quantity - total_deducted
+        print(
+            f"Обновляем ячейку A2 значением: {new_total_quantity}"
+        )  # Отладочная информация
+        # Обновляем значение в Google Sheets
+        sh.worksheet("Общее количество").update("A2", [[new_total_quantity]])
+        await callback.message.answer(
+            f"Общее количество товара обновлено. Остаток: {new_total_quantity}"
+        )
+    else:
+        await callback.message.answer(
+            "Недостаточно товара для выполнения данного задания."
+        )
     await callback.message.edit_text(text=f"Задание отправлено в таблицу")
     await callback.answer("")
 
