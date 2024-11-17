@@ -222,7 +222,42 @@ async def reglament_callback(callback: CallbackQuery):
         buf = []
         for line in file:
             row = line.strip().split()
+            row.append(int(row[3]) - int(row[2]))
             buf.append(row)
+
+    # Загрузка данных из таблицы заданий
+    tasks_worksheet = sh.worksheet("Задание")
+    tasks_data = tasks_worksheet.get_all_values()
+
+    # Создаем словарь для быстрого поиска по адресу
+    tasks_dict = {row[0]: int(row[2]) for row in tasks_data[1:]}  # Пропускаем заголовок
+
+    for entry in buf:
+        address = entry[0]  # Адрес из отчета
+        quantity_before = int(entry[2])  # "Было" из отчета
+        quantity_now = int(entry[3])  # "Стало" из отчета
+        quantity_to_deduct = (
+            quantity_before + quantity_now
+        )  # Вычисляем, сколько нужно вычесть
+
+        if address in tasks_dict:
+            # Вычисляем новое количество
+            new_quantity = tasks_dict[address] - quantity_to_deduct
+
+            # Обновляем запись в таблице заданий
+            row_index = next(
+                (
+                    index
+                    for index, row in enumerate(tasks_data[1:])
+                    if row[0] == address
+                ),
+                None,
+            )
+
+            if row_index is not None:
+                tasks_worksheet.update_cell(
+                    row_index + 2, 3, max(new_quantity, 0)
+                )  # Обновляем количество
 
     worksheet = sh.worksheet("Отчет")
 
