@@ -42,19 +42,29 @@ async def adress_callback(callback: CallbackQuery):
 
 @router1.callback_query(F.data == "Заявка")  # админ_склада вывод
 async def zayavka_callback(callback: CallbackQuery):
-    adress = (
-        service.spreadsheets()
-        .values()
-        .get(spreadsheetId=spreadsheet_id, range="Заявки")
-        .execute()
-        .get("values", [])
-    )
+    # Получаем доступ к таблице "Заявки"
+    worksheet_zayavki = sh.worksheet("Заявки")
 
+    # Получаем все данные из таблицы
+    zayavki_data = worksheet_zayavki.get_all_values()
+
+    # Инициализируем буфер для хранения строк
     buffer = ""
-    for i in adress[1:]:
-        buffer += (
-            f"Адрес: {find_address(i[2])}\nВладелец: {i[3]}\nКоличество: {i[4]}\n\n"
-        )
+
+    # Проходим по всем строкам, начиная со второй (пропуская заголовок)
+    for i in zayavki_data[1:]:
+        # Получаем значения из ячеек
+        address = find_address(i[0])  # Предполагается, что адрес в первой колонке
+        owner = i[1]  # Предполагается, что владелец во второй колонке
+        quantity = i[2]  # Предполагается, что количество в третьей колонке
+
+        # Проверяем, не пустые ли значения и формируем строку
+        if address and owner and quantity:
+            buffer += (
+                f"Адрес: {address}\n"
+                f"Владелец: {owner}\n"
+                f"Количество: {quantity}\n\n"
+            )
 
     await callback.message.answer(text=f"{buffer}", disable_web_page_preview=True)
     await callback.answer("")
@@ -312,10 +322,27 @@ async def reglament_callback(callback: CallbackQuery):
 async def reglament_callback(callback: CallbackQuery):
     worksheet_otch = sh.worksheet("Отчет")
     worksheet_zada = sh.worksheet("Задание")
+    worksheet_total = sh.worksheet("Общее количество")
 
-    existing_data = worksheet_otch.get_all_values()[1:]
-    if existing_data:
-        pass
+    tasks_data = worksheet_zada.get_all_values()
+    total_quantity = 0
+    for row in tasks_data[1:]:
+        try:
+            total_quantity += int(row[2])
+        except (ValueError, IndexError):
+            continue
+
+    current_total_quantity = int(
+        worksheet_total.cell(2, 1).value
+    )  # Получаем текущее количество из A2
+
+    # Обновляем ячейку A2 с новым значением
+    new_total_quantity = current_total_quantity + total_quantity
+    worksheet_total.update_cell(2, 1, new_total_quantity)
+
+    # existing_data = worksheet_otch.get_all_values()[1:]
+    # if existing_data:
+    #     pass
 
     worksheet_otch.batch_clear(["A2:E"])
     worksheet_zada.batch_clear(["A2:G"])
