@@ -23,6 +23,10 @@ class Zayavka(StatesGroup):
     text = State()
 
 
+class Case1(StatesGroup):
+    text = State()
+
+
 @router1.callback_query(F.data == "Адреса")  # общая
 async def adress_callback(callback: CallbackQuery):
     adress = (
@@ -34,7 +38,7 @@ async def adress_callback(callback: CallbackQuery):
     )
     buffer = ""
     for i in adress[1:]:
-        buffer += f"Адрес: {find_address(i[1])}\nВладелец: {i[2]}\nТелефон: {create_whatsapp_link(i[3])}\nПримечание: {i[4]}\n\n"
+        buffer += f"{i[0]}: Адрес: {find_address(i[1])}\nВладелец: {i[2]}\nТелефон: {create_whatsapp_link(i[3])}\nПримечание: {i[4]}\n\n"
 
     await callback.message.answer(text=f"{buffer}", disable_web_page_preview=True)
     await callback.answer("")
@@ -103,7 +107,7 @@ async def reglament_callback(callback: CallbackQuery):
     buffer = ""
     try:
         for i in adress[1:]:
-            buffer += f"Адрес: {find_address(i[0])}\nВладелец: {i[1]}\nКоличество: {i[2]}\nТелефон: {create_whatsapp_link(i[3])}\n\n"
+            buffer += f"Адрес: {find_address(i[0])}\nВладелец: {i[1]}\nТелефон: {create_whatsapp_link(i[2])}\n\n"
         await callback.message.edit_text(
             text=f"{buffer}", disable_web_page_preview=True
         )
@@ -151,33 +155,6 @@ async def reglament_callback(callback: CallbackQuery):
     with open("add_zadanie.txt", "w") as file:
         pass
 
-    # Получаем значение из ячейки A2 и преобразуем в целое число
-    total_quantity_cell = sh.worksheet("Общее количество").cell(2, 1).value
-    print(f"Значение из ячейки A2: '{total_quantity_cell}'")  # Отладочная информация
-
-    try:
-        current_total_quantity = int(total_quantity_cell)
-    except ValueError:
-        await callback.message.answer(
-            "Ошибка: значение в ячейке A2 не является числом."
-        )
-        return  # Завершаем выполнение при ошибке
-
-    # Проверяем, достаточно ли товара для вычитания
-    if current_total_quantity >= total_deducted:
-        new_total_quantity = current_total_quantity - total_deducted
-        print(
-            f"Обновляем ячейку A2 значением: {new_total_quantity}"
-        )  # Отладочная информация
-        # Обновляем значение в Google Sheets
-        sh.worksheet("Общее количество").update("A2", [[new_total_quantity]])
-        await callback.message.answer(
-            f"Общее количество товара обновлено. Остаток: {new_total_quantity}"
-        )
-    else:
-        await callback.message.answer(
-            "Недостаточно товара для выполнения данного задания."
-        )
     await callback.message.edit_text(text=f"Задание отправлено в таблицу")
     await callback.answer("")
 
@@ -185,7 +162,7 @@ async def reglament_callback(callback: CallbackQuery):
 @router1.callback_query(F.data == "Добавить_задание")  # админ_склада
 async def reglament_callback(callback: CallbackQuery, state: FSMContext):
     await state.set_state(Zadanie.text)
-    await callback.message.edit_text(text="Введите Адрес Владельца Количество Телефон")
+    await callback.message.edit_text(text="Введите Адрес Владельца Телефон")
     await callback.answer("")
 
 
@@ -230,44 +207,24 @@ async def reglament_callback(callback: CallbackQuery):
 async def reglament_callback(callback: CallbackQuery):
     with open("add_otchet.txt", "r", encoding="utf-8") as file:
         buf = []
+        total_to_deduct = 0
         for line in file:
             row = line.strip().split()
-            row.append(int(row[3]) - int(row[2]))
+            row.append(int(row[2]) - int(row[1]))
+            total_to_deduct += int(row[2]) - int(row[1])
             buf.append(row)
 
-    # Загрузка данных из таблицы заданий
-    tasks_worksheet = sh.worksheet("Задание")
-    tasks_data = tasks_worksheet.get_all_values()
+    worksheet_zada = sh.worksheet("Задание")
+    try:
+        d2_value = int(worksheet_zada.cell(2, 4).value)
+    except (ValueError, AttributeError):
+        print("Error: Cell D2 in 'Задание' sheet is not a valid integer or is empty.")
+        d2_value = 0
 
-    # Создаем словарь для быстрого поиска по адресу
-    tasks_dict = {row[0]: int(row[2]) for row in tasks_data[1:]}  # Пропускаем заголовок
+    # Subtract the total to deduct from D2
+    new_d2_value = max(d2_value - total_to_deduct, 0)  # Prevent negative values
 
-    for entry in buf:
-        address = entry[0]  # Адрес из отчета
-        quantity_before = int(entry[2])  # "Было" из отчета
-        quantity_now = int(entry[3])  # "Стало" из отчета
-        quantity_to_deduct = (
-            quantity_before + quantity_now
-        )  # Вычисляем, сколько нужно вычесть
-
-        if address in tasks_dict:
-            # Вычисляем новое количество
-            new_quantity = tasks_dict[address] - quantity_to_deduct
-
-            # Обновляем запись в таблице заданий
-            row_index = next(
-                (
-                    index
-                    for index, row in enumerate(tasks_data[1:])
-                    if row[0] == address
-                ),
-                None,
-            )
-
-            if row_index is not None:
-                tasks_worksheet.update_cell(
-                    row_index + 2, 3, max(new_quantity, 0)
-                )  # Обновляем количество
+    worksheet_zada.update_cell(2, 4, new_d2_value)
 
     worksheet = sh.worksheet("Отчет")
 
@@ -283,7 +240,7 @@ async def reglament_callback(callback: CallbackQuery):
 @router1.callback_query(F.data == "Добавить_отчет")  # админ_склада
 async def reglament_callback(callback: CallbackQuery, state: FSMContext):
     await state.set_state(Otchet.text)
-    await callback.message.edit_text(text="Введите Адрес Владельца Было Стало")
+    await callback.message.edit_text(text="Введите Адрес Было Стало")
     await callback.answer("")
 
 
@@ -324,27 +281,35 @@ async def reglament_callback(callback: CallbackQuery):
     worksheet_zada = sh.worksheet("Задание")
     worksheet_total = sh.worksheet("Общее количество")
 
-    tasks_data = worksheet_zada.get_all_values()
-    total_quantity = 0
-    for row in tasks_data[1:]:
-        try:
-            total_quantity += int(row[2])
-        except (ValueError, IndexError):
-            continue
+    # tasks_data = worksheet_zada.get_all_values()
+    # total_quantity = 0
+    # for row in tasks_data[1:]:
+    #     try:
+    #         total_quantity += int(row[2])
+    #     except (ValueError, IndexError):
+    #         continue
 
-    current_total_quantity = int(
-        worksheet_total.cell(2, 1).value
-    )  # Получаем текущее количество из A2
+    # current_total_quantity = int(
+    #     worksheet_total.cell(2, 1).value
+    # )  # Получаем текущее количество из A2
 
-    # Обновляем ячейку A2 с новым значением
-    new_total_quantity = current_total_quantity + total_quantity
+    # # Обновляем ячейку A2 с новым значением
+    # new_total_quantity = current_total_quantity + total_quantity
+    # worksheet_total.update_cell(2, 1, new_total_quantity)
+    # ------------------
+    try:
+        d2_value = int(worksheet_zada.cell(2, 4).value)  # Get value from D2
+    except (ValueError, AttributeError):
+        print("Error: Cell D2 in 'Задание' sheet is not a valid integer or is empty.")
+        d2_value = 0  # Handle error gracefully
+
+    current_total_quantity = int(worksheet_total.cell(2, 1).value)
+
+    new_total_quantity = current_total_quantity + d2_value
     worksheet_total.update_cell(2, 1, new_total_quantity)
+    # ------------------
 
-    # existing_data = worksheet_otch.get_all_values()[1:]
-    # if existing_data:
-    #     pass
-
-    worksheet_otch.batch_clear(["A2:E"])
+    worksheet_otch.batch_clear(["A2:F"])
     worksheet_zada.batch_clear(["A2:G"])
     await callback.message.edit_text(text="Отчет и Задание очищены")
     await callback.answer("")
@@ -372,9 +337,7 @@ async def reglament_callback(callback: CallbackQuery):
 @router1.callback_query(F.data == "Добавить_заявка")  # админ_склада
 async def reglament_callback(callback: CallbackQuery, state: FSMContext):
     await state.set_state(Zayavka.text)
-    await callback.message.edit_text(
-        text="Введите Адрес Владельца Наименование Количество"
-    )
+    await callback.message.edit_text(text="Введите Адрес Владельца Количество")
     await callback.answer("")
 
 
@@ -420,3 +383,91 @@ def find_address(address):
 def create_whatsapp_link(phone_number):
     normalized_number = "".join(filter(str.isdigit, phone_number))
     return f"https://wa.me/{normalized_number}"
+
+
+@router1.callback_query(F.data == "Кейс")  # курьер
+async def reglament_callback(callback: CallbackQuery):
+    await callback.message.edit_text(
+        text="Выберите одно действие", reply_markup=inline_keyboard_case
+    )
+    await callback.answer("")
+
+
+@router1.callback_query(F.data == "Добавить_кейс")  # админ_склада
+async def reglament_callback(callback: CallbackQuery, state: FSMContext):
+    await state.set_state(Case1.text)
+    await callback.message.edit_text(text="Введите Количество")
+    await callback.answer("")
+
+
+@router1.message(Case1.text)
+async def reglament_process_callback(message: Message, state: FSMContext):
+    data = message.text
+    await state.clear()
+    with open("add_case.txt", "a") as file:
+        file.writelines(f"{data}\n")
+
+    await message.answer(
+        f"Добавлено, нажмите подтвердить чтобы отправить в таблицу",
+        reply_markup=inline_keyboard_case,
+    )
+
+
+@router1.callback_query(F.data == "Подтвердить_кейс")  # админ
+async def reglament_callback(callback: CallbackQuery):
+    # worksheet_zada = sh.worksheet("Задание")
+    # worksheet_total = sh.worksheet("Общее количество")
+    # with open("add_case.txt", "r", encoding="utf-8") as file:
+    #     last_line = ""
+    #     for line in file:
+    #         last_line = line.strip()
+
+    #     new_quantity = int(last_line)
+
+    # worksheet_zada.update_cell(2, 4, new_quantity)
+
+    # current_total = int(worksheet_total.cell(2, 1).value)
+    # new_total = max(0, current_total - new_quantity)
+    # worksheet_total.update_cell(2, 1, new_total)
+
+    # await callback.message.answer(text=f"Кейс добавлен")
+    # await callback.answer("")
+    worksheet_zada = sh.worksheet("Задание")
+    worksheet_total = sh.worksheet("Общее количество")
+
+    with open("add_case.txt", "r", encoding="utf-8") as file:
+        last_line = ""
+        for line in file:
+            last_line = line.strip()
+
+    new_quantity = int(last_line)
+    # Get the current value from D2
+    current_d2_value = worksheet_zada.cell(2, 4).value
+    try:
+        current_d2_int = int(
+            current_d2_value
+        )  # Attempt conversion to integer; handles empty cells
+    except ValueError:
+        current_d2_int = 0  # Default to 0 if cell is empty or contains non-integer data
+
+    # Add new quantity to the current quantity in D2
+    updated_d2_value = current_d2_int + new_quantity
+    worksheet_zada.update_cell(2, 4, updated_d2_value)
+
+    # Update "Общее количество"
+    current_total = int(worksheet_total.cell(2, 1).value)
+    new_total = max(0, current_total - new_quantity)  # Prevent negative total
+    worksheet_total.update_cell(2, 1, new_total)
+    await callback.message.answer(
+        text=f"Кейс добавлен. Новое значение в: {updated_d2_value}"
+    )
+    await callback.answer("")
+
+
+@router1.callback_query(F.data == "Заново_кейс")  # админ_склада
+async def reglament_callback(callback: CallbackQuery):
+    with open("add_case.txt", "w") as file:
+        pass
+
+    await callback.message.edit_text(text="Кейс очищена!")
+    await callback.answer("")
